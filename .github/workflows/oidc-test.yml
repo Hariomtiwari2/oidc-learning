@@ -1,0 +1,29 @@
+name: OIDC Learning Test
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-oidc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::211125632417:role/learning
+          aws-region: ap-south-1
+
+      - name: Upload test file to S3
+        run: |
+          echo "Hello from GitHub Actions OIDC" > hello.txt
+          aws s3 cp hello.txt s3://tempr-bucket/hello.txt
