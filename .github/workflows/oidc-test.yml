@@ -24,13 +24,24 @@ jobs:
           echo "Owner ID: ${{ github.repository_owner_id }}"
           echo "Ref: ${{ github.ref }}"
 
-      - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::211125632417:role/learning
-          aws-region: ap-south-1
-
-      - name: Upload test file to S3
+      - name: Request and validate OIDC token
         run: |
-          echo "Hello from GitHub Actions OIDC" > hello.txt
-          aws s3 cp hello.txt s3://tempr-bucket/hello.txt
+          OIDC_RESPONSE=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
+          OIDC_TOKEN=$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")
+          OIDC_TOKEN="$OIDC_TOKEN" python - <<'PY'
+          import base64
+          import json
+          import os
+
+          parts = os.environ["OIDC_TOKEN"].split(".")
+          if len(parts) != 3:
+              raise SystemExit("Invalid OIDC token format")
+
+          payload = parts[1] + "=" * (-len(parts[1]) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+          print(f"OIDC sub: {claims.get('sub')}")
+          print(f"OIDC aud: {claims.get('aud')}")
+
+          if claims.get("aud") != "sts.amazonaws.com":
+              raise SystemExit("Unexpected OIDC audience")
+          PY
